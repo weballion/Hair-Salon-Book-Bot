@@ -11,16 +11,18 @@ CREATE TABLE stylists (
   telegram_chat_id BIGINT      UNIQUE NOT NULL,
   language         TEXT        DEFAULT 'de',  -- 'de' | 'ru'
   buffer_minutes   INT         DEFAULT 15,
+  slot_chunk_min   INT         DEFAULT 60,
   working_hours    JSONB       NOT NULL,
   created_at       TIMESTAMPTZ DEFAULT now()
 );
 
 CREATE TABLE services (
-  id                   UUID    PRIMARY KEY DEFAULT gen_random_uuid(),
-  stylist_id           UUID    REFERENCES stylists(id) ON DELETE CASCADE,
-  name                 TEXT    NOT NULL,
-  default_duration_min INT     NOT NULL DEFAULT 60,
-  is_active            BOOLEAN DEFAULT true
+  id                   UUID           PRIMARY KEY DEFAULT gen_random_uuid(),
+  stylist_id           UUID           REFERENCES stylists(id) ON DELETE CASCADE,
+  name                 TEXT           NOT NULL,
+  default_duration_min INT            NOT NULL DEFAULT 60,
+  price_eur            NUMERIC(8,2),
+  is_active            BOOLEAN        DEFAULT true
 );
 
 CREATE TABLE clients (
@@ -49,12 +51,32 @@ CREATE INDEX idx_appointments_time
   ON appointments (stylist_id, start_time)
   WHERE status = 'confirmed';
 
+-- RLS: enable row-level security but allow anon read (bot auth is enforced in n8n)
+ALTER TABLE stylists   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE services   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE clients    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "anon can read stylists"     ON stylists     FOR SELECT TO anon USING (true);
+CREATE POLICY "anon can read services"     ON services     FOR SELECT TO anon USING (true);
+CREATE POLICY "anon can read clients"      ON clients      FOR SELECT TO anon USING (true);
+CREATE POLICY "anon can read appointments" ON appointments FOR SELECT TO anon USING (true);
+CREATE POLICY "anon can update appointments" ON appointments FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon can insert appointments" ON appointments FOR INSERT TO anon WITH CHECK (true);
+
 CREATE TABLE conversation_state (
   chat_id      BIGINT      PRIMARY KEY,
   current_step TEXT,
   context      JSONB       DEFAULT '{}',
   updated_at   TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE conversation_state ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "anon can select conversation_state" ON conversation_state FOR SELECT TO anon USING (true);
+CREATE POLICY "anon can insert conversation_state" ON conversation_state FOR INSERT TO anon WITH CHECK (true);
+CREATE POLICY "anon can update conversation_state" ON conversation_state FOR UPDATE TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon can delete conversation_state" ON conversation_state FOR DELETE TO anon USING (true);
 
 -- ============================================================
 -- SEED DATA
@@ -79,20 +101,20 @@ VALUES (
 );
 
 -- Services (ссылаются на stylist через subquery)
-INSERT INTO services (stylist_id, name, default_duration_min)
-SELECT id, 'Damenhaarschnitt / Стрижка женская',      60 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Herrenhaarschnitt / Стрижка мужская',     30 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Kinderhaarschnitt / Стрижка детская',     30 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Färben komplett / Окрашивание полное',   120 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Ansatz färben / Окрашивание корни',       60 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Strähnchen / Мелирование',                90 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Balayage / Балаж',                       150 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Haarkur / Маска для волос',               30 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Keratin-Behandlung / Кератин',           180 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Föhnen / Укладка феном',                  30 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Hochsteckfrisur / Прическа торжество',    60 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Schnitt + Färben / Стрижка + окраска',  150 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
-SELECT id, 'Schnitt + Strähnchen / Стрижка + мелир', 120 FROM stylists WHERE telegram_chat_id = 27020283;
+INSERT INTO services (stylist_id, name, default_duration_min, price_eur)
+SELECT id, 'Damenhaarschnitt / Стрижка женская',       60,  45.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Herrenhaarschnitt / Стрижка мужская',      30,  25.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Kinderhaarschnitt / Стрижка детская',      30,  20.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Färben komplett / Окрашивание полное',    120,  80.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Ansatz färben / Окрашивание корни',        60,  55.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Strähnchen / Мелирование',                 90,  70.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Balayage / Балаж',                        150, 100.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Haarkur / Маска для волос',                30,  20.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Keratin-Behandlung / Кератин',            180, 150.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Föhnen / Укладка феном',                   30,  30.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Hochsteckfrisur / Прическа торжество',     60,  60.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Schnitt + Färben / Стрижка + окраска',   150, 115.00 FROM stylists WHERE telegram_chat_id = 27020283 UNION ALL
+SELECT id, 'Schnitt + Strähnchen / Стрижка + мелир',  120, 100.00 FROM stylists WHERE telegram_chat_id = 27020283;
 
 -- Clients
 INSERT INTO clients (name, phone, notes) VALUES

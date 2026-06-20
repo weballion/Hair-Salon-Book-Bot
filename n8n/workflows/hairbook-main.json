@@ -1,0 +1,2419 @@
+{
+  "name": "HairBook — Главный бот (Шаги 6-8)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "n1-tg-trigger",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        304
+      ],
+      "webhookId": "62e92f53-e3db-4361-9d61-b80831bb32a4",
+      "credentials": {
+        "telegramApi": {
+          "id": "d9pZzrR2UzDD3Mgj",
+          "name": "Telegram HairBook Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-auth",
+              "leftValue": "={{ $json.message?.chat?.id ?? $json.callback_query?.message?.chat?.id }}",
+              "rightValue": 27020283,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n2-auth-check",
+      "name": "Auth Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        240,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "⛔ Нет доступа",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "id": "n3-no-access",
+      "name": "No Access",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        480,
+        528
+      ],
+      "webhookId": "a64e648d-eb39-4de2-84a4-4dc3d563a9e5",
+      "credentials": {
+        "telegramApi": {
+          "id": "d9pZzrR2UzDD3Mgj",
+          "name": "Telegram HairBook Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-voice",
+              "leftValue": "={{ $json.message.voice !== undefined && $json.message.voice !== null }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n4-is-voice",
+      "name": "Is Voice?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/getFile",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "file_id",
+              "value": "={{ $json.message.voice.file_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n5-get-file-info",
+      "name": "Get File Info",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        720,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{ 'https://api.telegram.org/file/botYOUR_BOT_TOKEN/' + $json.result.file_path }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "voice_file"
+            }
+          }
+        }
+      },
+      "id": "n6-download-voice",
+      "name": "Download Voice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "parameterType": "formBinaryData",
+              "name": "file",
+              "inputDataFieldName": "voice_file"
+            },
+            {
+              "name": "model",
+              "value": "whisper-large-v3-turbo"
+            },
+            {
+              "name": "language",
+              "value": "ru"
+            },
+            {
+              "name": "response_format",
+              "value": "json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n7-groq-whisper",
+      "name": "Groq Whisper",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        -128
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dyCTw6YFfdpnFwp1",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nlet userText;\nif (item.json.text && !item.json.message) {\n  userText = item.json.text;\n} else {\n  userText = item.json.message?.text || $('Telegram Trigger').first().json.message?.text || '';\n}\nconst chatId = $('Telegram Trigger').first().json.message.chat.id;\nconst todayStr = new Date().toISOString().split('T')[0];\nconst systemPrompt = [\n  'Ты - ассистент парикмахерского салона.',\n  'Дата сегодня: ' + todayStr,\n  'Верни ТОЛЬКО JSON без markdown:',\n  '{\"action\":\"view_schedule|list_services|new_appointment|free_slots|unknown\",\"period\":\"today|tomorrow|week|month|null\",\"date\":\"YYYY-MM-DD|null\"}',\n  '',\n  'Примеры:',\n  '\"Сегодня\" -> {\"action\":\"view_schedule\",\"period\":\"today\"}',\n  '\"Завтра\" -> {\"action\":\"view_schedule\",\"period\":\"tomorrow\"}',\n  '\"Неделя\" -> {\"action\":\"view_schedule\",\"period\":\"week\"}',\n  '\"30 дней\" -> {\"action\":\"view_schedule\",\"period\":\"month\"}',\n  '\"Свободные окна\" -> {\"action\":\"free_slots\",\"period\":\"today\"}',\n  '\"Услуги\" -> {\"action\":\"list_services\"}',\n  '\"Новая запись\" -> {\"action\":\"new_appointment\"}'\n].join('\\n');\nconst llmBody = {\n  model: 'llama-3.3-70b-versatile',\n  messages: [\n    { role: 'system', content: systemPrompt },\n    { role: 'user', content: userText }\n  ],\n  temperature: 0.1,\n  max_tokens: 300\n};\nreturn [{ json: { user_text: userText, chat_id: chatId, llm_body: llmBody } }];"
+      },
+      "id": "n8-build-prompt",
+      "name": "Build Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.llm_body) }}",
+        "options": {}
+      },
+      "id": "n9-groq-llm",
+      "name": "Groq LLM",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        80
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "dyCTw6YFfdpnFwp1",
+          "name": "Groq API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst rawContent = item.json.choices[0].message.content;\nlet intentStr = rawContent.trim();\nif (intentStr.startsWith('```')) {\n  intentStr = intentStr.replace(/```json?\\n?/g, '').replace(/```/g, '').trim();\n}\nlet intent;\ntry {\n  intent = JSON.parse(intentStr);\n} catch(e) {\n  intent = { action: 'unknown' };\n}\nconst chatId = $('Build Prompt').first().json.chat_id;\nintent.chat_id = chatId;\nconst today = new Date();\nconst todayStr = today.toISOString().split('T')[0];\nif (intent.period === 'today' || (intent.action === 'view_schedule' && !intent.date && !intent.period)) {\n  intent.date = todayStr; intent.period = 'today';\n} else if (intent.period === 'tomorrow') {\n  const t = new Date(today); t.setDate(t.getDate() + 1);\n  intent.date = t.toISOString().split('T')[0];\n} else if (intent.period === 'week') {\n  const d = today.getDay();\n  const mon = new Date(today); mon.setDate(today.getDate() - (d === 0 ? 6 : d - 1));\n  intent.date = mon.toISOString().split('T')[0];\n} else if (intent.period === 'month') {\n  intent.date = todayStr;\n}\nreturn [{ json: intent }];"
+      },
+      "id": "n10-parse-intent",
+      "name": "Parse Intent",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-r1",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "view_schedule",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-r2",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "list_services",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "sw-r3",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "free_slots",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "id": "n11-action-switch",
+      "name": "Action Switch",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        2160,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\nconst period = item.json.period;\nconst date = item.json.date;\nconst chatId = item.json.chat_id;\nlet dateFrom, dateTo;\nif (period === 'week') {\n  dateFrom = date + 'T00:00:00';\n  const end = new Date(date); end.setDate(end.getDate() + 6);\n  dateTo = end.toISOString().split('T')[0] + 'T23:59:59';\n} else if (period === 'month') {\n  dateFrom = date + 'T00:00:00';\n  const end = new Date(date); end.setDate(end.getDate() + 29);\n  dateTo = end.toISOString().split('T')[0] + 'T23:59:59';\n} else {\n  const d = date || new Date().toISOString().split('T')[0];\n  dateFrom = d + 'T00:00:00'; dateTo = d + 'T23:59:59';\n}\nreturn [{ json: { date_from: dateFrom, date_to: dateTo, period, chat_id: chatId } }];"
+      },
+      "id": "n12-compute-date",
+      "name": "Compute Date Range",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/appointments",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,start_time,end_time,duration_min,notes,status,clients(name),services(name,default_duration_min)"
+            },
+            {
+              "name": "and",
+              "value": "={{ '(start_time.gte.' + $json.date_from + ',start_time.lte.' + $json.date_to + ')' }}"
+            },
+            {
+              "name": "status",
+              "value": "neq.cancelled"
+            },
+            {
+              "name": "order",
+              "value": "start_time.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n13-get-appointments",
+      "name": "Get Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        -128
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nconst appts=items.map(i=>i.json).filter(a=>a.id);\nconst dr=$('Compute Date Range').first().json;\nconst period=dr.period,chatId=dr.chat_id;\nconst KB={keyboard:[[{text:'📅 Сегодня'},{text:'📅 Завтра'}],[{text:'📅 Неделя'},{text:'📅 30 дней вперед'}],[{text:'🟢 Свободные окна'},{text:'✅ Новая запись'}],[{text:'💼 Услуги'}]],resize_keyboard:true,one_time_keyboard:false};\nfunction dur(m){if(!m)return'';return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nfunction hd(p){const n=new Date(),o={day:'numeric',month:'short',timeZone:'Europe/Berlin'};if(p==='today')return n.toLocaleDateString('ru-RU',o);if(p==='tomorrow'){const t=new Date(n);t.setDate(t.getDate()+1);return t.toLocaleDateString('ru-RU',o);}if(p==='month'){const t=new Date(n);t.setDate(t.getDate()+29);return n.toLocaleDateString('ru-RU',o)+'–'+t.toLocaleDateString('ru-RU',o);}const d=n.getDay(),m=new Date(n);m.setDate(n.getDate()-(d===0?6:d-1));const s=new Date(m);s.setDate(m.getDate()+6);return m.toLocaleDateString('ru-RU',o)+'–'+s.toLocaleDateString('ru-RU',o);}\nconst wd=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'],dt=hd(period),cnt=appts.length;\nif(cnt===0){return [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:'📅 Записей нет.',parse_mode:'HTML',reply_markup:KB})}}];}\nconst hdr={today:'📅 <b>Сегодня, '+dt+'</b> · '+cnt+' зап.',tomorrow:'📅 <b>Завтра, '+dt+'</b> · '+cnt+' зап.',week:'📅 <b>Неделя '+dt+'</b> · '+cnt+' зап.',month:'📅 <b>30 дней '+dt+'</b> · '+cnt+' зап.'}[period]||'📅 <b>Расписание</b>';\nconst lines=[],btns=[];let row=[];\nfor(const a of appts){const s=new Date(a.start_time),en=new Date(a.end_time),tS=s.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}),tE=en.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}),day=wd[s.getDay()],cl=a.clients?.name||'Клиент',svc=a.services?.name||'Услуга',d=dur(a.duration_min||a.services?.default_duration_min),fn=cl.split(' ')[0],note=a.notes?' ('+a.notes+')':'',pfx=(period==='week'||period==='month')?day+' ':'';lines.push('🕐 <code>'+pfx+tS+'–'+tE+'</code>  '+fn+' · '+svc+(d?' · '+d:'')+note);row.push({text:'❌ '+pfx+tS+' '+fn,callback_data:'cancel:'+a.id+':'+period});if(row.length===2){btns.push(row);row=[];}}\nif(row.length)btns.push(row);\nreturn [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:hdr+'\\n\\n'+lines.join('\\n'),parse_mode:'HTML',reply_markup:{inline_keyboard:btns}})}}];"
+      },
+      "id": "n14-format-schedule",
+      "name": "Format Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2880,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n15-reply-schedule",
+      "name": "Reply Schedule",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        -128
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/services",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "select",
+              "value": "id,name,price_eur,default_duration_min"
+            },
+            {
+              "name": "order",
+              "value": "price_eur.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n16-get-services",
+      "name": "Get Services",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2416,
+        96
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\nconst services = items.map(i => i.json).filter(s => s.id);\nconst chatId = $('Telegram Trigger').first().json.message.chat.id;\nconst KB = {keyboard:[[{text:'📅 Сегодня'},{text:'📅 Завтра'}],[{text:'📅 Неделя'},{text:'📅 30 дней вперед'}],[{text:'🟢 Свободные окна'},{text:'✅ Новая запись'}],[{text:'💼 Услуги'}]],resize_keyboard:true,one_time_keyboard:false};\nif (services.length === 0) return [{ json: { chat_id: chatId, tg_body: JSON.stringify({chat_id:chatId,text:'💼 Список услуг пуст.',reply_markup:KB}) } }];\nfunction dur(m){return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nconst lines = services.map(s => '• <b>'+s.name+'</b>'+(s.default_duration_min?' — '+dur(s.default_duration_min):'')+( s.price_eur?' · '+s.price_eur+'€':''));\nconst text = '💼 <b>Услуги салона:</b>\\n\\n' + lines.join('\\n\\n');\nreturn [{ json: { chat_id: chatId, tg_body: JSON.stringify({chat_id:chatId,text,parse_mode:'HTML',reply_markup:KB}) } }];"
+      },
+      "id": "n17-format-services",
+      "name": "Format Services",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n18-reply-services",
+      "name": "Reply Services",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        96
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n19-reply-unknown",
+      "name": "Reply Unknown",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3120,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const chatId = $input.first().json.chat_id;\nconst KB = {keyboard:[[{text:'📅 Сегодня'},{text:'📅 Завтра'}],[{text:'📅 Неделя'},{text:'📅 30 дней вперед'}],[{text:'🟢 Свободные окна'},{text:'✅ Новая запись'}],[{text:'💼 Услуги'}]],resize_keyboard:true,one_time_keyboard:false};\nreturn [{ json: { chat_id: chatId, tg_body: JSON.stringify({chat_id:chatId,text:'🤔 Не понял запрос. Используй кнопки меню.',reply_markup:KB}) } }];"
+      },
+      "id": "n20-build-unknown",
+      "name": "Build Unknown Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2416,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-cb",
+              "leftValue": "={{ $json.callback_query !== undefined && $json.callback_query !== null }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "n21-is-callback",
+      "name": "Is Callback?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cq = $input.first().json.callback_query;\nconst parts = cq.data.split(':');\nconst appointmentId = parts[1];\nconst period = parts[2] || 'today';\nconst chatId = cq.message.chat.id;\nreturn [{ json: { appointment_id: appointmentId, period, chat_id: chatId, callback_query_id: cq.id, message_id: cq.message.message_id } }];"
+      },
+      "id": "n22-parse-cancel",
+      "name": "Parse Cancel",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "YOUR_SUPABASE_URL/rest/v1/appointments",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ 'eq.' + $json.appointment_id }}"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "{\"status\":\"cancelled\"}",
+        "options": {}
+      },
+      "id": "n23-cancel-supabase",
+      "name": "Cancel in Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const parsed = $('Parse Cancel').first().json;\nreturn [{ json: { answer_body: JSON.stringify({callback_query_id:parsed.callback_query_id,text:'✅ Запись отменена!'}), delete_body: JSON.stringify({chat_id:parsed.chat_id,message_id:parsed.message_id}) } }];"
+      },
+      "id": "n24-build-cancel-resp",
+      "name": "Build Cancel Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/answerCallbackQuery",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.answer_body }}",
+        "options": {}
+      },
+      "id": "n25-answer-callback",
+      "name": "Answer Callback",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/deleteMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Build Cancel Response').first().json.delete_body }}",
+        "options": {}
+      },
+      "id": "n27-delete-message",
+      "name": "Delete Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p=$('Parse Cancel').first().json;\nconst period=p.period,chatId=p.chat_id,now=new Date();\nlet dateFrom,dateTo;\nif(period==='week'){const d=now.getDay(),mon=new Date(now);mon.setDate(now.getDate()-(d===0?6:d-1));dateFrom=mon.toISOString().split('T')[0]+'T00:00:00';const sun=new Date(mon);sun.setDate(mon.getDate()+6);dateTo=sun.toISOString().split('T')[0]+'T23:59:59';}else if(period==='month'){const s=now.toISOString().split('T')[0];dateFrom=s+'T00:00:00';const e=new Date(now);e.setDate(e.getDate()+29);dateTo=e.toISOString().split('T')[0]+'T23:59:59';}else if(period==='tomorrow'){const t=new Date(now);t.setDate(t.getDate()+1);const s=t.toISOString().split('T')[0];dateFrom=s+'T00:00:00';dateTo=s+'T23:59:59';}else{const s=now.toISOString().split('T')[0];dateFrom=s+'T00:00:00';dateTo=s+'T23:59:59';}\nreturn [{json:{date_from:dateFrom,date_to:dateTo,period,chat_id:chatId}}];"
+      },
+      "id": "n28-compute-cancel-date",
+      "name": "Compute Cancel Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1920,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/appointments",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,start_time,end_time,duration_min,notes,status,clients(name),services(name,default_duration_min)"
+            },
+            {
+              "name": "and",
+              "value": "={{ '(start_time.gte.' + $json.date_from + ',start_time.lte.' + $json.date_to + ')' }}"
+            },
+            {
+              "name": "status",
+              "value": "neq.cancelled"
+            },
+            {
+              "name": "order",
+              "value": "start_time.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n29-get-cancel-appts",
+      "name": "Get Cancel Appointments",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        528
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nconst appts=items.map(i=>i.json).filter(a=>a.id);\nconst dr=$('Compute Cancel Date').first().json;\nconst period=dr.period,chatId=dr.chat_id;\nconst KB={keyboard:[[{text:'📅 Сегодня'},{text:'📅 Завтра'}],[{text:'📅 Неделя'},{text:'📅 30 дней вперед'}],[{text:'🟢 Свободные окна'},{text:'✅ Новая запись'}],[{text:'💼 Услуги'}]],resize_keyboard:true,one_time_keyboard:false};\nfunction dur(m){if(!m)return'';return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nfunction hd(p){const n=new Date(),o={day:'numeric',month:'short',timeZone:'Europe/Berlin'};if(p==='today')return n.toLocaleDateString('ru-RU',o);if(p==='tomorrow'){const t=new Date(n);t.setDate(t.getDate()+1);return t.toLocaleDateString('ru-RU',o);}if(p==='month'){const t=new Date(n);t.setDate(t.getDate()+29);return n.toLocaleDateString('ru-RU',o)+'–'+t.toLocaleDateString('ru-RU',o);}const d=n.getDay(),m=new Date(n);m.setDate(n.getDate()-(d===0?6:d-1));const s=new Date(m);s.setDate(m.getDate()+6);return m.toLocaleDateString('ru-RU',o)+'–'+s.toLocaleDateString('ru-RU',o);}\nconst wd=['Вс','Пн','Вт','Ср','Чт','Пт','Сб'],dt=hd(period),cnt=appts.length;\nif(cnt===0){return [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:'📅 Записей нет.',parse_mode:'HTML',reply_markup:KB})}}];}\nconst hdr={today:'📅 <b>Сегодня, '+dt+'</b> · '+cnt+' зап.',tomorrow:'📅 <b>Завтра, '+dt+'</b> · '+cnt+' зап.',week:'📅 <b>Неделя '+dt+'</b> · '+cnt+' зап.',month:'📅 <b>30 дней '+dt+'</b> · '+cnt+' зап.'}[period]||'📅 <b>Расписание</b>';\nconst lines=[],btns=[];let row=[];\nfor(const a of appts){const s=new Date(a.start_time),en=new Date(a.end_time),tS=s.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}),tE=en.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'}),day=wd[s.getDay()],cl=a.clients?.name||'Клиент',svc=a.services?.name||'Услуга',d=dur(a.duration_min||a.services?.default_duration_min),fn=cl.split(' ')[0],note=a.notes?' ('+a.notes+')':'',pfx=(period==='week'||period==='month')?day+' ':'';lines.push('🕐 <code>'+pfx+tS+'–'+tE+'</code>  '+fn+' · '+svc+(d?' · '+d:'')+note);row.push({text:'❌ '+pfx+tS+' '+fn,callback_data:'cancel:'+a.id+':'+period});if(row.length===2){btns.push(row);row=[];}}\nif(row.length)btns.push(row);\nreturn [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:hdr+'\\n\\n'+lines.join('\\n'),parse_mode:'HTML',reply_markup:{inline_keyboard:btns}})}}];"
+      },
+      "id": "n30-format-cancel-schedule",
+      "name": "Format Cancel Schedule",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n31-send-cancel-schedule",
+      "name": "Send Cancel Schedule",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2688,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cb-r1",
+                    "leftValue": "={{ $json.callback_query.data }}",
+                    "rightValue": "cancel:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cb-r2",
+                    "leftValue": "={{ $json.callback_query.data }}",
+                    "rightValue": "slots:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cb-r3",
+                    "leftValue": "={{ $json.callback_query.data }}",
+                    "rightValue": "slot:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cb-r4",
+                    "leftValue": "={{ $json.callback_query.data }}",
+                    "rightValue": "book:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 1
+                },
+                "conditions": [
+                  {
+                    "id": "cb-r5",
+                    "leftValue": "={{ $json.callback_query.data }}",
+                    "rightValue": "confirm:",
+                    "operator": {
+                      "type": "string",
+                      "operation": "startsWith"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "id": "n32-callback-router",
+      "name": "Callback Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        720,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item=$input.first().json;\nlet date,chatId,callbackQueryId,messageId;\nif(item.callback_query){\n  date=item.callback_query.data.split(':')[1];\n  chatId=item.callback_query.message.chat.id;\n  callbackQueryId=item.callback_query.id;\n  messageId=item.callback_query.message.message_id;\n}else{\n  date=new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Berlin'}).format(new Date());\n  chatId=item.chat_id;\n  callbackQueryId=null;\n  messageId=null;\n}\nreturn [{json:{date,chat_id:chatId,callback_query_id:callbackQueryId,message_id:messageId}}];"
+      },
+      "id": "n33-compute-slots-date",
+      "name": "Compute Slots Date",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2400,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/stylists",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "telegram_chat_id",
+              "value": "eq.27020283"
+            },
+            {
+              "name": "select",
+              "value": "id,working_hours,slot_chunk_min,buffer_minutes"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n34-get-stylist",
+      "name": "Get Stylist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        720
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/appointments",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "select",
+              "value": "id,start_time,end_time,duration_min,status"
+            },
+            {
+              "name": "and",
+              "value": "={{ '(start_time.gte.' + $('Compute Slots Date').first().json.date + 'T00:00:00,start_time.lte.' + $('Compute Slots Date').first().json.date + 'T23:59:59)' }}"
+            },
+            {
+              "name": "status",
+              "value": "neq.cancelled"
+            },
+            {
+              "name": "order",
+              "value": "start_time.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n35-get-slots-appts",
+      "name": "Get Slots Appts",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2880,
+        720
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const slotsInput=$('Compute Slots Date').first().json;\nconst date=slotsInput.date,chatId=slotsInput.chat_id;\nconst stylist=$('Get Stylist').first().json;\nconst wh=stylist.working_hours||{};\nconst CHUNK_MIN=stylist.slot_chunk_min||60;\nconst BUFFER=stylist.buffer_minutes||15;\nconst d=new Date(date+'T12:00:00');\nconst dayKeys=['sun','mon','tue','wed','thu','fri','sat'];\nconst sched=wh[dayKeys[d.getDay()]];\nconst dispOpts={weekday:'short',day:'numeric',month:'short',timeZone:'Europe/Berlin'};\nconst displayDate=d.toLocaleDateString('ru-RU',dispOpts);\nconst prevD=new Date(date);prevD.setDate(prevD.getDate()-1);\nconst nextD=new Date(date);nextD.setDate(nextD.getDate()+1);\nconst prevStr=prevD.toISOString().split('T')[0],nextStr=nextD.toISOString().split('T')[0];\nconst shortOpts={day:'numeric',month:'short',timeZone:'Europe/Berlin'};\nconst navBtns=[{text:'◀ '+prevD.toLocaleDateString('ru-RU',shortOpts),callback_data:'slots:'+prevStr},{text:nextD.toLocaleDateString('ru-RU',shortOpts)+' ▶',callback_data:'slots:'+nextStr}];\nif(!sched){return [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:'🔴 <b>'+displayDate+'</b> — выходной',parse_mode:'HTML',reply_markup:{inline_keyboard:[navBtns]}})}}];}\nfunction toMins(t){const[h,m]=t.split(':').map(Number);return h*60+m;}\nfunction berlinMins(iso){const p=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Berlin',hour:'2-digit',minute:'2-digit',hour12:false}).formatToParts(new Date(iso));return parseInt(p.find(x=>x.type==='hour').value)*60+parseInt(p.find(x=>x.type==='minute').value);}\nfunction fmt(m){return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0');}\nfunction fmtC(m){return String(Math.floor(m/60)).padStart(2,'0')+String(m%60).padStart(2,'0');}\nfunction dur(m){return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nconst workStart=toMins(sched.start),workEnd=toMins(sched.end);\nconst appts=$input.all().map(i=>i.json).filter(a=>a.id);\nconst busy=appts.map(a=>({start:berlinMins(a.start_time),end:Math.min(berlinMins(a.end_time)+BUFFER,workEnd)}));\nif(sched.break_start&&sched.break_end)busy.push({start:toMins(sched.break_start),end:toMins(sched.break_end)});\nbusy.sort((a,b)=>a.start-b.start);\nconst MIN_SLOT=30,free=[];let cursor=workStart;\nfor(const b of busy){if(b.start>cursor&&b.start-cursor>=MIN_SLOT)free.push({start:cursor,end:b.start});if(b.end>cursor)cursor=b.end;}\nif(workEnd>cursor&&workEnd-cursor>=MIN_SLOT)free.push({start:cursor,end:workEnd});\nconst dateC=date.replace(/-/g,'');\nconst slots=[];\nfor(const w of free){let s=w.start;if(s%60!==0){const nextH=Math.ceil(s/60)*60;const fe=Math.min(nextH,w.end);if(fe-s>=MIN_SLOT)slots.push({start:s,end:fe,dur:fe-s});s=fe;}while(s<w.end){const rem=w.end-s;if(rem<MIN_SLOT)break;const e=Math.min(s+CHUNK_MIN,w.end);slots.push({start:s,end:e,dur:e-s});s=e;}}\nconst btns=[];let row=[];\nfor(const sl of slots){row.push({text:fmt(sl.start)+' · '+dur(sl.dur),callback_data:'slot:'+dateC+':'+fmtC(sl.start)+':'+sl.dur});if(row.length===2){btns.push(row);row=[];}}\nif(row.length)btns.push(row);\nbtns.push(navBtns);\nconst hdr=slots.length?'🟢 <b>Свободные окна · '+displayDate+'</b> · '+slots.length+' окн.':'🔴 <b>Занято · '+displayDate+'</b>';\nconst lines=slots.length?slots.map(sl=>'<code>'+fmt(sl.start)+' – '+fmt(sl.end)+'</code>  '+dur(sl.dur)).join('\\n'):'Все временные окна заняты.';\nreturn [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:hdr+'\\n\\n'+lines,parse_mode:'HTML',reply_markup:{inline_keyboard:btns}})}}];"
+      },
+      "id": "n36-calc-free-slots",
+      "name": "Calc Free Slots",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3120,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n37-send-free-slots",
+      "name": "Send Free Slots",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cq=$input.first().json.callback_query;\nconst parts=cq.data.split(':');\nconst dateC=parts[1],timeC=parts[2],slotDuration=parseInt(parts[3]);\nconst date=dateC.slice(0,4)+'-'+dateC.slice(4,6)+'-'+dateC.slice(6,8);\nconst time=timeC.slice(0,2)+':'+timeC.slice(2,4);\nreturn [{json:{date,time,slot_duration:slotDuration,chat_id:cq.message.chat.id,callback_query_id:cq.id,message_id:cq.message.message_id}}];"
+      },
+      "id": "n38-parse-slot",
+      "name": "Parse Slot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/services",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "is_active",
+              "value": "eq.true"
+            },
+            {
+              "name": "select",
+              "value": "id,name,price_eur,default_duration_min"
+            },
+            {
+              "name": "default_duration_min",
+              "value": "={{ 'lte.' + $json.slot_duration }}"
+            },
+            {
+              "name": "order",
+              "value": "default_duration_min.asc"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n39-get-services-for-slot",
+      "name": "Get Services for Slot",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        928
+      ],
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "const items=$input.all();\nconst services=items.map(i=>i.json).filter(s=>s.id);\nconst slot=$('Parse Slot').first().json;\nconst chatId=slot.chat_id,date=slot.date,time=slot.time,slotDur=slot.slot_duration;\nconst dateC=date.replace(/-/g,''),timeC=time.replace(':','');\nconst d=new Date(date+'T12:00:00');\nconst displayDate=d.toLocaleDateString('ru-RU',{weekday:'short',day:'numeric',month:'short',timeZone:'Europe/Berlin'});\nfunction dur(m){return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nif(services.length===0){\n  return [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text:'❌ Нет услуг для этого окна ('+dur(slotDur)+'). Выберите другое.',parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'⬅️ Назад',callback_data:'slots:'+date}]]}})}}];\n}\nconst hdr='💼 <b>Выберите услугу</b>\\n⏰ '+displayDate+' · '+time+'\\n\\n';\nconst btns=services.map(s=>[{text:s.name.split('/')[0].trim()+' · '+dur(s.default_duration_min)+(s.price_eur?' · '+s.price_eur+'€':''),callback_data:'book:'+dateC+':'+timeC+':'+s.id}]);\nbtns.push([{text:'⬅️ Назад',callback_data:'slots:'+date}]);\nconst text=hdr.trim();\nreturn [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text,parse_mode:'HTML',reply_markup:{inline_keyboard:btns}})}}];"
+      },
+      "id": "n40-send-service-selection",
+      "name": "Send Service Selection",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n41-reply-service-selection",
+      "name": "Reply Service Selection",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        928
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cq=$input.first().json.callback_query;\nconst parts=cq.data.split(':');\nconst dateC=parts[1],timeC=parts[2],serviceId=parts[3];\nconst date=dateC.slice(0,4)+'-'+dateC.slice(4,6)+'-'+dateC.slice(6,8);\nconst time=timeC.slice(0,2)+':'+timeC.slice(2,4);\nreturn [{json:{date,time,service_id:serviceId,chat_id:cq.message.chat.id,callback_query_id:cq.id,message_id:cq.message.message_id}}];"
+      },
+      "id": "n42-parse-book",
+      "name": "Parse Book",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/services",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "id",
+              "value": "={{ 'eq.' + $json.service_id }}"
+            },
+            {
+              "name": "select",
+              "value": "id,name,price_eur,default_duration_min"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n43-get-service-details",
+      "name": "Get Service Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const book=$('Parse Book').first().json;\nconst svc=$input.first().json;\nconst chatId=book.chat_id,date=book.date,time=book.time,serviceId=book.service_id;\nconst dateC=date.replace(/-/g,''),timeC=time.replace(':','');\nconst d=new Date(date+'T12:00:00');\nconst displayDate=d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Berlin'});\nfunction dur(m){return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nconst svcName=svc.name||'Услуга',svcDur=svc.default_duration_min||60,svcPrice=svc.price_eur?svc.price_eur+'€':'';\nconst text='📝 <b>Подтвердите запись</b>\\n\\n📅 '+displayDate+'\\n⏰ '+time+'\\n✂️ '+svcName+'\\n'+(svcPrice?'💰 '+svcPrice+'\\n':'')+'⏱ '+dur(svcDur);\nconst confirmData='confirm:'+dateC+':'+timeC+':'+serviceId+':'+svcDur;\nreturn [{json:{chat_id:chatId,tg_body:JSON.stringify({chat_id:chatId,text,parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Подтвердить',callback_data:confirmData},{text:'❌ Отмена',callback_data:'slots:'+date}]]}})}}];"
+      },
+      "id": "n44-send-booking-confirm",
+      "name": "Send Booking Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      },
+      "id": "n45-reply-booking-confirm",
+      "name": "Reply Booking Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const cq=$input.first().json.callback_query;\nconst parts=cq.data.split(':');\nconst dateC=parts[1],timeC=parts[2],serviceId=parts[3],durationMin=parseInt(parts[4]);\nconst date=dateC.slice(0,4)+'-'+dateC.slice(4,6)+'-'+dateC.slice(6,8);\nconst time=timeC.slice(0,2)+':'+timeC.slice(2,4);\nconst chatId=cq.message.chat.id,callbackQueryId=cq.id,messageId=cq.message.message_id;\n// Convert Berlin local time → UTC\nconst noon=new Date(date+'T12:00:00Z');\nconst berlinNoonH=parseInt(new Intl.DateTimeFormat('en-US',{timeZone:'Europe/Berlin',hour:'numeric',hour12:false}).format(noon));\nconst utcOffset=berlinNoonH-12;\nconst[h,m]=time.split(':').map(Number);\nconst[y,mo,dy]=date.split('-').map(Number);\nconst startUTC=new Date(Date.UTC(y,mo-1,dy,h-utcOffset,m,0)).toISOString();\nconst endUTC=new Date(new Date(startUTC).getTime()+durationMin*60000).toISOString();\nreturn [{json:{date,time,service_id:serviceId,duration_min:durationMin,start_time:startUTC,end_time:endUTC,chat_id:chatId,callback_query_id:callbackQueryId,message_id:messageId}}];"
+      },
+      "id": "n46-parse-confirm",
+      "name": "Parse Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "url": "YOUR_SUPABASE_URL/rest/v1/stylists",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "telegram_chat_id",
+              "value": "eq.27020283"
+            },
+            {
+              "name": "select",
+              "value": "id"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "n47-get-stylist-id",
+      "name": "Get Stylist ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_SUPABASE_URL/rest/v1/appointments",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({stylist_id:$('Get Stylist ID').first().json.id,client_id:null,service_id:$('Parse Confirm').first().json.service_id,start_time:$('Parse Confirm').first().json.start_time,end_time:$('Parse Confirm').first().json.end_time,duration_min:$('Parse Confirm').first().json.duration_min,status:'confirmed',notes:$('Get Name from State').first().json?.context?.client_name||null}) }}",
+        "options": {}
+      },
+      "id": "n48-insert-appointment",
+      "name": "Insert Appointment",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1440,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p=$('Parse Confirm').first().json;\nconst chatId=p.chat_id,callbackQueryId=p.callback_query_id,messageId=p.message_id,date=p.date;\nconst d=new Date(date+'T12:00:00');\nconst displayDate=d.toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Berlin'});\nconst timeOpts={hour:'2-digit',minute:'2-digit',timeZone:'Europe/Berlin'};\nconst tStart=new Date(p.start_time).toLocaleTimeString('ru-RU',timeOpts);\nconst tEnd=new Date(p.end_time).toLocaleTimeString('ru-RU',timeOpts);\nreturn [{json:{chat_id:chatId,answer_body:JSON.stringify({callback_query_id:callbackQueryId,text:'✅ Запись создана!'}),delete_body:JSON.stringify({chat_id:chatId,message_id:messageId}),schedule_body:JSON.stringify({chat_id:chatId,text:'✅ <b>Запись создана!</b>\\n\\n📅 '+displayDate+'\\n⏰ '+tStart+'–'+tEnd,parse_mode:'HTML'})}}];"
+      },
+      "id": "n49-build-booking-done",
+      "name": "Build Booking Done",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/answerCallbackQuery",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.answer_body }}",
+        "options": {}
+      },
+      "id": "n50-answer-confirm-cb",
+      "name": "Answer Confirm CB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/deleteMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Build Booking Done').first().json.delete_body }}",
+        "options": {}
+      },
+      "id": "n51-delete-confirm-msg",
+      "name": "Delete Confirm Msg",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2160,
+        1328
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $('Build Booking Done').first().json.schedule_body }}",
+        "options": {}
+      },
+      "id": "n52-send-booking-done",
+      "name": "Send Booking Done",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2400,
+        1328
+      ]
+    },
+    {
+      "id": "n-is-start",
+      "name": "Is Start?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        720,
+        80
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-start",
+              "leftValue": "={{ $json.message?.text }}",
+              "rightValue": "/start",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    },
+    {
+      "id": "n-build-welcome",
+      "name": "Build Welcome",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        80
+      ],
+      "parameters": {
+        "jsCode": "const chatId=$('Telegram Trigger').first().json.message.chat.id;\nconst KB={keyboard:[[{text:'📅 Сегодня'},{text:'📅 Завтра'}],[{text:'📅 Неделя'},{text:'📅 30 дней вперед'}],[{text:'🟢 Свободные окна'},{text:'✅ Новая запись'}],[{text:'💼 Услуги'}]],resize_keyboard:true,one_time_keyboard:false};\nconst text='👋 Добро пожаловать в <b>HairBook</b>!\\n\\nЯ помогаю управлять расписанием волосяного салона.\\n\\n📋 <b>Что я умею:</b>\\n\\n📅 Расписание — сегодня, завтра, неделя, 30 дней\\n🟢 Свободные окна — найти время для записи\\n✏️ Новая запись — записать клиента на услугу\\n❌ Отмена — через кнопку в расписании\\n💼 Услуги — список с ценами и длительностью\\n\\nИспользуйте кнопки меню 👇';\nreturn [{json:{tg_body:JSON.stringify({chat_id:chatId,text,parse_mode:'HTML',reply_markup:KB})}}];"
+      }
+    },
+    {
+      "id": "n-reply-welcome",
+      "name": "Reply Welcome",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1200,
+        80
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ $json.tg_body }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "n-save-book-state",
+      "name": "Save Book State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        1480
+      ],
+      "parameters": {
+        "jsCode": "const parseBook=$('Parse Book').first().json;\nconst svc=$('Get Service Details').first().json;\nconst chatId=parseBook.chat_id;\nconst upsertBody=JSON.stringify({chat_id:chatId,current_step:'awaiting_client_name',context:{date:parseBook.date,time:parseBook.time,service_id:parseBook.service_id,duration_min:svc.default_duration_min,service_name:svc.name,price:svc.price_eur}});\nconst askBody=JSON.stringify({chat_id:chatId,text:'✏️ Введите имя клиента:',parse_mode:'HTML'});\nreturn [{json:{chatId,upsertBody,askBody}}];"
+      }
+    },
+    {
+      "id": "n-upsert-conv-state",
+      "name": "Upsert Conv State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        1480
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "YOUR_SUPABASE_URL/rest/v1/conversation_state",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Save Book State').first().json.upsertBody }}"
+      }
+    },
+    {
+      "id": "n-ask-client-name",
+      "name": "Ask Client Name",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        1480
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Save Book State').first().json.askBody }}"
+      }
+    },
+    {
+      "id": "n-load-conv-state",
+      "name": "Load Conv State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "YOUR_SUPABASE_URL/rest/v1/conversation_state",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ 'eq.' + $('Telegram Trigger').first().json.message.chat.id }}"
+            },
+            {
+              "name": "select",
+              "value": "current_step,context"
+            }
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "n-is-awaiting-name",
+      "name": "Is Awaiting Name?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1200,
+        300
+      ],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "cond-step",
+              "leftValue": "={{ $json.current_step === 'awaiting_client_name' && !['📅 Сегодня','📅 Завтра','📅 Неделя','📅 30 дней вперед','🟢 Свободные окна','✅ Новая запись','💼 Услуги'].includes(($('Telegram Trigger').first().json.message?.text||'')) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "n-build-name-confirm",
+      "name": "Build Name Confirm",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        460
+      ],
+      "parameters": {
+        "jsCode": "const msg=$('Telegram Trigger').first().json.message;\nconst chatId=msg.chat.id;\nconst clientName=msg.text;\nconst ctx=$('Load Conv State').first().json.context||{};\nfunction dur(m){return m<60?m+' мин':m%60?Math.floor(m/60)+' ч '+(m%60)+' мин':m/60+' ч';}\nconst{date,time,service_id:svcId,duration_min:durM,service_name:svcName,price}=ctx;\nconst dc=date.replace(/-/g,''),tc=time.replace(':','');\nconst displayDate=new Date(date+'T12:00:00').toLocaleDateString('ru-RU',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Berlin'});\nconst confirmData='confirm:'+dc+':'+tc+':'+svcId+':'+durM;\nconst text='📝 <b>Подтвердите запись</b>\\n\\n📅 '+displayDate+'\\n⏰ '+time+'\\n👤 '+clientName+'\\n✂️ '+(svcName||'Услуга')+(price?'\\n💰 '+price+'€':'')+('\\n⏱ '+dur(durM));\nconst updCtx=Object.assign({},ctx,{client_name:clientName});\nconst patchBody=JSON.stringify({context:updCtx,current_step:'name_saved',updated_at:new Date().toISOString()});\nconst tgBody=JSON.stringify({chat_id:chatId,text,parse_mode:'HTML',reply_markup:{inline_keyboard:[[{text:'✅ Подтвердить',callback_data:confirmData},{text:'❌ Отмена',callback_data:'slots:'+date}]]}});\nreturn [{json:{chatId,patchBody,tgBody}}];"
+      }
+    },
+    {
+      "id": "n-patch-name-state",
+      "name": "Patch Name State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        460
+      ],
+      "parameters": {
+        "method": "PATCH",
+        "url": "YOUR_SUPABASE_URL/rest/v1/conversation_state",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Prefer",
+              "value": "return=minimal"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ 'eq.' + $('Build Name Confirm').first().json.chatId }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Build Name Confirm').first().json.patchBody }}"
+      }
+    },
+    {
+      "id": "n-reply-name-confirm",
+      "name": "Reply Name Confirm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1920,
+        460
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Build Name Confirm').first().json.tgBody }}"
+      }
+    },
+    {
+      "id": "n-get-name-from-state",
+      "name": "Get Name from State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1090,
+        1500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "YOUR_SUPABASE_URL/rest/v1/conversation_state",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ 'eq.' + $('Parse Confirm').first().json.chat_id }}"
+            },
+            {
+              "name": "select",
+              "value": "context"
+            }
+          ]
+        }
+      },
+      "alwaysOutputData": true
+    },
+    {
+      "id": "n-clear-conv-state",
+      "name": "Clear Conv State",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        1328
+      ],
+      "parameters": {
+        "method": "DELETE",
+        "url": "YOUR_SUPABASE_URL/rest/v1/conversation_state",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "apikey",
+              "value": "YOUR_SUPABASE_ANON_KEY"
+            },
+            {
+              "name": "Authorization",
+              "value": "Bearer YOUR_SUPABASE_ANON_KEY"
+            }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ 'eq.' + $('Parse Confirm').first().json.chat_id }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Auth Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auth Check": {
+      "main": [
+        [
+          {
+            "node": "Is Callback?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Access",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Voice?": {
+      "main": [
+        [
+          {
+            "node": "Get File Info",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Start?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get File Info": {
+      "main": [
+        [
+          {
+            "node": "Download Voice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Voice": {
+      "main": [
+        [
+          {
+            "node": "Groq Whisper",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Whisper": {
+      "main": [
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Prompt": {
+      "main": [
+        [
+          {
+            "node": "Groq LLM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq LLM": {
+      "main": [
+        [
+          {
+            "node": "Parse Intent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Intent": {
+      "main": [
+        [
+          {
+            "node": "Action Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Switch": {
+      "main": [
+        [
+          {
+            "node": "Compute Date Range",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get Services",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compute Slots Date",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Unknown Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Date Range": {
+      "main": [
+        [
+          {
+            "node": "Get Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Appointments": {
+      "main": [
+        [
+          {
+            "node": "Format Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Schedule": {
+      "main": [
+        [
+          {
+            "node": "Reply Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Services": {
+      "main": [
+        [
+          {
+            "node": "Format Services",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Services": {
+      "main": [
+        [
+          {
+            "node": "Reply Services",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Unknown Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply Unknown",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Callback?": {
+      "main": [
+        [
+          {
+            "node": "Callback Router",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is Voice?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Callback Router": {
+      "main": [
+        [
+          {
+            "node": "Parse Cancel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Compute Slots Date",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Slot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Book",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Cancel": {
+      "main": [
+        [
+          {
+            "node": "Cancel in Supabase",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel in Supabase": {
+      "main": [
+        [
+          {
+            "node": "Build Cancel Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Cancel Response": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Callback": {
+      "main": [
+        [
+          {
+            "node": "Delete Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Message": {
+      "main": [
+        [
+          {
+            "node": "Compute Cancel Date",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Cancel Date": {
+      "main": [
+        [
+          {
+            "node": "Get Cancel Appointments",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Cancel Appointments": {
+      "main": [
+        [
+          {
+            "node": "Format Cancel Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Cancel Schedule": {
+      "main": [
+        [
+          {
+            "node": "Send Cancel Schedule",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Slots Date": {
+      "main": [
+        [
+          {
+            "node": "Get Stylist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stylist": {
+      "main": [
+        [
+          {
+            "node": "Get Slots Appts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Slots Appts": {
+      "main": [
+        [
+          {
+            "node": "Calc Free Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calc Free Slots": {
+      "main": [
+        [
+          {
+            "node": "Send Free Slots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Slot": {
+      "main": [
+        [
+          {
+            "node": "Get Services for Slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Services for Slot": {
+      "main": [
+        [
+          {
+            "node": "Send Service Selection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Service Selection": {
+      "main": [
+        [
+          {
+            "node": "Reply Service Selection",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Book": {
+      "main": [
+        [
+          {
+            "node": "Get Service Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Booking Confirm": {
+      "main": [
+        [
+          {
+            "node": "Reply Booking Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Stylist ID": {
+      "main": [
+        [
+          {
+            "node": "Insert Appointment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Appointment": {
+      "main": [
+        [
+          {
+            "node": "Build Booking Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Booking Done": {
+      "main": [
+        [
+          {
+            "node": "Answer Confirm CB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Confirm CB": {
+      "main": [
+        [
+          {
+            "node": "Delete Confirm Msg",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Confirm Msg": {
+      "main": [
+        [
+          {
+            "node": "Send Booking Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Start?": {
+      "main": [
+        [
+          {
+            "node": "Build Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Load Conv State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Welcome": {
+      "main": [
+        [
+          {
+            "node": "Reply Welcome",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Service Details": {
+      "main": [
+        [
+          {
+            "node": "Save Book State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Book State": {
+      "main": [
+        [
+          {
+            "node": "Upsert Conv State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Conv State": {
+      "main": [
+        [
+          {
+            "node": "Ask Client Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Conv State": {
+      "main": [
+        [
+          {
+            "node": "Is Awaiting Name?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Awaiting Name?": {
+      "main": [
+        [
+          {
+            "node": "Build Name Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Name Confirm": {
+      "main": [
+        [
+          {
+            "node": "Patch Name State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Patch Name State": {
+      "main": [
+        [
+          {
+            "node": "Reply Name Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Confirm": {
+      "main": [
+        [
+          {
+            "node": "Get Name from State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Name from State": {
+      "main": [
+        [
+          {
+            "node": "Get Stylist ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Booking Done": {
+      "main": [
+        [
+          {
+            "node": "Clear Conv State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {}
+}
