@@ -1,4 +1,22 @@
+# Environment
 .env
 .env.local
+.env.*.local
+
+# Logs
 *.log
+npm-debug.log*
+
+# OS
 .DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+
+# Claude Code (project memory & local settings)
+.claude/
